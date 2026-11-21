@@ -1,6 +1,6 @@
 ---
 name: hotelumo
-description: Read and manage Hotelumo hotel data with the `hotelumo` CLI — reservations and their stay dates, the guest directory, rooms and room types, rate plans and per-day prices, live availability and booking requests, webhook subscriptions and API keys, backed by the Hotelumo REST API at api.hotelumo.com. Use when asked to look up, create, update or delete Hotelumo reservations, guests, rooms or rates, to check what is bookable for a stay, to publish prices, or for anything involving the `hotelumo` command or app.hotelumo.com data.
+description: Read and manage Hotelumo hotel data with the `hotelumo` CLI — reservations and their stay dates, the guest directory, rooms and room types, room blocks (nights a room is out of order, out of service or in private use), rate plans and per-day prices, live availability and booking requests, webhook subscriptions and API keys, backed by the Hotelumo REST API at api.hotelumo.com. Use when asked to look up, create, update or delete Hotelumo reservations, guests, rooms or rates, to take a room out of sale for some nights, to check what is bookable for a stay, to publish prices, or for anything involving the `hotelumo` command or app.hotelumo.com data.
 license: Apache-2.0
 compatibility: Requires Node.js 18+, network access, and a Hotelumo account — log in through the browser or with an API key (created at https://app.hotelumo.com)
 metadata:
@@ -14,9 +14,9 @@ allowed-tools: Bash(hotelumo:*) Bash(npx hotelumo:*)
 
 `hotelumo` reads and manages the data on
 [app.hotelumo.com](https://app.hotelumo.com) through the Hotelumo REST API:
-hotels, reservations, guests, rooms and room types, rate plans and per-day
-prices, availability, webhook subscriptions and API keys — the same records
-the dashboard shows.
+hotels, reservations, guests, rooms, room types and room blocks, rate plans
+and per-day prices, availability, webhook subscriptions and API keys — the
+same records the dashboard shows.
 
 Run it as `hotelumo` when installed globally (`npm install -g hotelumo`) or
 as `npx hotelumo` otherwise. `hotelumo --help` and `hotelumo <command> --help`
@@ -37,17 +37,24 @@ hotelumo signup --email founder@example.com --json
 ```
 
 ```bash
-hotelumo login                # interactive: choose browser or API key login
+hotelumo login                # interactive: browser, another device or API key
 hotelumo login --browser      # opens app.hotelumo.com/cli; stores a session
+hotelumo login --device       # approve from a phone or another computer; stores a session
 hotelumo login --with-key     # masked prompt for an API key secret
 hotelumo logout               # clears everything stored in ~/.hotelumo/
 ```
 
-Two ways in, both stored in `~/.hotelumo/`:
+Three ways in, all stored in `~/.hotelumo/`:
 
 - **Browser** — `hotelumo login --browser` opens
   [app.hotelumo.com](https://app.hotelumo.com) to log in with the Hotelumo
   account and stores a token session (refreshed automatically).
+- **Another device** — `hotelumo login --device` prints a link such as
+  `https://app.hotelumo.com/cli?code=WDJB-MJHT`, a QR code and a one-time code,
+  then waits up to ten minutes for someone signed in to Hotelumo to approve it
+  on a phone or computer, and stores the same token session as the browser
+  login. It needs neither a browser on this machine nor a terminal: when you run
+  it for someone, give them the link and the code.
 - **API key** — an organization administrator creates a key in the Hotelumo
   dashboard, under the hotel's **API keys** settings, or from an existing
   session with `hotelumo keys add`. The secret is shown once, at creation.
@@ -72,8 +79,9 @@ An API key carries per-resource scopes: `reservations:read`,
 `reservations:write`, `guests:read`, `guests:write`, `rooms:read`,
 `rooms:write`, `rates:read`, `rates:write`. New keys start with the four
 `:read` scopes. `403` on a scope is a permissions gap, not a bug — an
-administrator widens the key. `rooms` covers rooms **and** room types;
-`rates` covers rate plans, daily rates **and** the availability query.
+administrator widens the key. `rooms` covers rooms, room types **and** room
+blocks; `rates` covers rate plans, daily rates **and** the availability
+query.
 
 Three surfaces are deliberately **operator-session only** and answer `401`
 to an API key, because they expose credentials: `hotelumo hotels list`,
@@ -94,10 +102,12 @@ a `429` means back off, not retry-loop.
 | Arrivals and departures for a window    | `hotelumo reservations list --stayDateFrom … --stayDateTo …`        |
 | Find a guest by email                   | `hotelumo guests list --email <email>`                              |
 | The room inventory and its state        | `hotelumo rooms list --hotelId <hotelId>`                           |
+| Rooms out of sale in a window           | `hotelumo room-blocks list --hotelId <hotelId> --from … --to …`     |
+| Take a room out of sale for some nights | `hotelumo room-blocks add --roomId … --startDate … --endDate …`     |
 | What is sellable, and at what price     | `hotelumo rate-plans list --hotelId <hotelId>`                      |
 | What is bookable for a stay             | `hotelumo availability check <hotelId> --checkInDate … --checkOutDate …` |
 | Publish prices for a date range         | `hotelumo daily-rates set --ratePlanId … --dateFrom … --price …`    |
-| One record, formatted                   | `hotelumo reservations read <id>` (or the guests / rooms / room-types / rate-plans equivalent) |
+| One record, formatted                   | `hotelumo reservations read <id>` (or the guests / rooms / room-blocks / room-types / rate-plans equivalent) |
 | The command tree as JSON                | `hotelumo schema` (or `hotelumo schema guests list` for one subtree) |
 
 Ids are Hotelumo record ids (24-character lowercase hex) — get them from the
@@ -183,6 +193,9 @@ hotelumo rooms read <roomId>
 hotelumo rooms add --hotelId <hotelId> --roomTypeId <roomTypeId> \
   --number 101 --floor 1
 hotelumo rooms update <roomId> --housekeepingStatus DIRTY
+hotelumo rooms add --hotelId <hotelId> --roomTypeId <roomTypeId> \
+  --number 1+2 --componentRoomIds <roomId1>,<roomId2>   # a combined room
+hotelumo rooms update <roomId> --componentRoomIds ""    # ordinary again
 hotelumo rooms delete <roomId...>                # one or more ids — permanent
 ```
 
@@ -199,7 +212,53 @@ Room `--status` accepts `AVAILABLE`, `OUT_OF_ORDER` and `OUT_OF_SERVICE`;
 `--housekeepingStatus` accepts `CLEAN`, `DIRTY` and `INSPECTED`. Prices are
 **not** on the room type — they are on its rate plans. Deleting a room type
 deletes its rate plans and their daily rates; the rooms of that type survive
-as unassigned.
+as unassigned. Deleting a room deletes its room blocks.
+
+A **combined room** is sold as one unit made of other rooms — apartments 1
+and 2 also let together as "1+2". `--componentRoomIds` takes the
+comma-separated ids of its parts: at least two rooms of the same hotel, none
+of them combined itself, each part of at most one combined room, and the
+combined room needs a room type of its own, apart from every part's — the API
+refuses anything else with `400`. Booking or blocking either side takes the
+other out of sale for those nights, so linking rooms that already hold the
+same night as the combined room is refused with `409`, and so is deleting a
+part before the combined room lets it go. `--componentRoomIds ""` makes it an
+ordinary room again; `rooms list` and `rooms read` show what a combined room
+is made of.
+
+## Room blocks
+
+```bash
+hotelumo room-blocks list --hotelId <hotelId> --from 2026-08-01 --to 2026-09-01
+hotelumo room-blocks list --roomId <roomId>      # --json
+hotelumo room-blocks get <roomBlockId>
+hotelumo room-blocks read <roomBlockId>
+hotelumo room-blocks add --roomId <roomId> --startDate 2026-08-10 \
+  --endDate 2026-08-12 --type OUT_OF_ORDER --note "Leaking shower"
+hotelumo room-blocks update <roomBlockId> --endDate 2026-08-14
+hotelumo room-blocks delete <roomBlockId...>     # puts the nights back on sale
+```
+
+A room block takes one room out of sale for a run of nights — a repair, the
+owner's own stay, a room kept free — on the booking page, in availability and
+on the connected channels, with no guest, folio or webhook. Its dates are
+nights, like a stay's: `--startDate` is the first blocked night and
+`--endDate` the first night the room is free again, **exclusive like a
+check-out** — `2026-08-10` to `2026-08-12` blocks two nights and the room
+sells again on the 12th. To block a single night, end on the next day.
+
+- `--type` accepts `OUT_OF_ORDER` (default), `OUT_OF_SERVICE`, `PRIVATE_USE`
+  and `OTHER`. It is a label only: every type closes the room the same way.
+- A block lasts at most 366 nights. A room gone for good takes
+  `rooms update --status OUT_OF_ORDER` instead.
+- A block takes its room's hotel, so it needs no `--hotelId`; one naming
+  another hotel is refused.
+- A block cannot share a night with a reservation in that room or with
+  another block of it: `409`. Never move or cancel a guest's reservation to
+  free the room unless the user asked for that.
+- `list` returns blocks earliest first; `--from` (inclusive) and `--to`
+  (exclusive) keep the blocks with a night in that window. `update` sends
+  only the fields you pass; `--note ""` clears the note.
 
 ## Rate plans and daily rates
 
@@ -298,7 +357,8 @@ user asked for it, never into a shared log.
 - **Every write needs a `hotelId`** unless the API key is pinned to one hotel
   (then it is implied). `add` takes `--hotelId`; `update` reuses the stored
   record's hotel when you omit it, which costs one extra read and therefore
-  needs the matching `:read` scope too.
+  needs the matching `:read` scope too. Room blocks are the exception: they
+  take their room's hotel.
 - **`update` sends only the fields you pass**; the API merges them into the
   stored record. Arbitrary fields go through `--body '<json>'`; named options
   win over `--body` on conflict.
@@ -367,5 +427,8 @@ Stored credentials live only in `~/.hotelumo/`.
 | `400: missing hotelId`                      | Pass `--hotelId` (see Writes above)                        |
 | `409` on `availability book`                | The offer changed — run `availability check` again first   |
 | `409` on `reservations approve`             | Only a `REQUESTED` reservation can be approved             |
+| `409` on `room-blocks add` / `update`       | A stay or another block holds the room on those nights     |
+| `400` on `room-blocks add` / `update`       | Fix what the message names, usually the dates              |
+| `409` on `rooms update` / `delete`          | Free the shared night, or unlink the part first            |
 | `400: Batch too large` on `daily-rates set` | Over 500 values — split the date range                     |
 | `429`                                       | Per-key rate limit — wait, do not retry-loop               |

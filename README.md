@@ -25,15 +25,16 @@ npx skills add hotelumo/skills@hotel-operations
 
 ## Skills
 
-| Skill                                                       | Backed by                                                    | Use it for                                                                                          |
-| ----------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| [`hotelumo`](skills/hotelumo/SKILL.md)                       | the [`hotelumo` CLI](https://github.com/hotelumo/cli) (npm)  | Reading and changing reservations, guests, rooms, rates and availability from the shell — `npx hotelumo` |
-| [`hotel-operations`](skills/hotel-operations/SKILL.md)       | the Hotelumo MCP connector (`https://mcp.hotelumo.com/mcp`)  | Read-only hotel operations through MCP tools in hosts like Claude, ChatGPT, Cursor, and Codex        |
+| Skill                                                  | Backed by                                                   | Use it for                                                                                               |
+| ------------------------------------------------------ | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| [`hotelumo`](skills/hotelumo/SKILL.md)                 | the [`hotelumo` CLI](https://github.com/hotelumo/cli) (npm) | Reading and changing reservations, guests, rooms, rates and availability from the shell — `npx hotelumo` |
+| [`hotel-operations`](skills/hotel-operations/SKILL.md) | the Hotelumo MCP connector (`https://mcp.hotelumo.com/mcp`) | Hotel operations and stock counts through MCP tools in hosts like Claude, ChatGPT, Cursor, and Codex     |
 
 The two are not interchangeable. The CLI skill drives the full REST API with
 an account or an API key, including writes. The MCP skill drives the hosted
-OAuth connector, which is strictly read-only and deliberately exposes no
-guest identities, individual reservations, payments or credentials.
+OAuth connector, which reads operations and changes nothing but a stock count,
+and deliberately exposes no guest identities, individual reservations,
+payments or credentials.
 
 Both need a Hotelumo account with at least one hotel —
 [sign up](https://app.hotelumo.com), then `hotelumo login` (CLI) or connect
